@@ -2,6 +2,10 @@
 
 Pagefold is a small desktop Markdown editor built for people who prefer ordinary files over a proprietary notes database. Notes and folders can be created in the app, reorganised by drag and drop, and opened in any other Markdown tool.
 
+[Download the Windows installer](https://github.com/BitForLI/pagefold-markdown-notes/releases/latest) · [Build it yourself](#development)
+
+The published installer is for Windows x64. Your notes stay as ordinary Markdown files in a folder you control; the app does not require an account or a cloud service.
+
 ## Product at a glance
 
 | | |
