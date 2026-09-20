@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, test } from 'vitest'
@@ -22,7 +22,7 @@ test('copies notes and attachments without changing the source library', async (
 
   const backup = await createLibraryBackup(library, destination)
 
-  expect(path.dirname(backup)).toBe(destination)
+  expect(path.dirname(backup)).toBe(await realpath(destination))
   expect(await readFile(path.join(backup, 'Hello.md'), 'utf8')).toBe('# Hello')
   expect(await readFile(path.join(backup, '.assets', 'image.png'), 'utf8')).toBe('image bytes')
   expect(await readFile(path.join(library, 'Hello.md'), 'utf8')).toBe('# Hello')
