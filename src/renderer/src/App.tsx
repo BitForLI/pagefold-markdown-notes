@@ -2,19 +2,13 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import {
   ChevronRight,
   FilePlus2,
-  FolderPlus,
   Hash,
   Link2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Search,
-  Settings,
-  Layers3,
 } from 'lucide-react'
 import type { BacklinkResult, EntryType, SearchResult, TreeEntry, WorkspaceSnapshot } from '../../shared/types'
 import { EditorPane, type ViewMode } from './components/EditorPane'
 import { NameDialog } from './components/EntryDialog'
-import { FileTree } from './components/FileTree'
 import { SettingsPanel, type AppSettings } from './components/SettingsPanel'
 import { DocumentTabs, SaveStatus } from './components/DocumentTabs'
 import { SearchDialog } from './components/SearchDialog'
@@ -24,6 +18,7 @@ import {
   type InsightLinkMode,
   type InsightPanelMode
 } from './components/DocumentInsights'
+import { LibrarySidebar } from './components/LibrarySidebar'
 import { displayEntryName, extractDocumentLocations, extractOutgoingDocumentLinks, flattenMarkdownFiles } from './lib/markdown'
 
 interface OpenTab {
@@ -88,7 +83,6 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null)
   const [dialogBusy, setDialogBusy] = useState(false)
-  const [rootDropActive, setRootDropActive] = useState(false)
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const saveVersions = useRef<Record<string, number>>({})
   const savePromises = useRef<Record<string, Promise<void> | undefined>>({})
@@ -659,46 +653,25 @@ export default function App() {
         />
       </header>
 
-      <aside className="left-sidebar">
-        <>
-            <div className="section-heading">
-              <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)} title="Collapse library" aria-label="Collapse library"><PanelLeftClose size={17} /></button>
-              <div className="library-create-buttons">
-                <button onClick={createQuickNote} title="New note" aria-label="New note"><FilePlus2 size={14} /></button>
-                <button onClick={() => requestCreate(defaultCreateParent, 'folder')} title="New folder" aria-label="New folder"><FolderPlus size={14} /></button>
-                <button onClick={() => requestCreate('', 'section')} title="New section" aria-label="New section"><Layers3 size={14} /></button>
-                <button onClick={() => setSearchOpen(true)} title="Search (Ctrl+P)" aria-label="Search library"><Search size={14} /></button>
-                <button onClick={() => setSettingsOpen(true)} title="Settings (Ctrl+,)" aria-label="Settings"><Settings size={14} /></button>
-              </div>
-            </div>
-            <div
-              className={`tree-scroll ${rootDropActive ? 'is-drop-target' : ''}`}
-              onClick={(event) => {
-                const target = event.target instanceof Element ? event.target : null
-                if (!target?.closest('[role="treeitem"]')) setSelectedPath('')
-              }}
-              onDragOver={(event) => {
-                event.preventDefault()
-                event.dataTransfer.dropEffect = event.dataTransfer.types.includes('Files') ? 'copy' : 'move'
-                if (event.target === event.currentTarget) setRootDropActive(true)
-              }}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node)) setRootDropActive(false)
-              }}
-              onDrop={(event) => {
-                setRootDropActive(false)
-                if (event.target !== event.currentTarget) return
-                const source = event.dataTransfer.getData('text/pagefold-path')
-                if (source) void moveEntry(source, '')
-                else void importMarkdownFiles(Array.from(event.dataTransfer.files), '')
-              }}
-            >
-              <FileTree tree={tree} activePath={activePath} selectedPath={selectedPath} onSelect={(entry) => setSelectedPath(entry.path)} onOpen={(path) => void openFile(path)} onCreate={requestCreate} onRename={(entry) => setNameDialog({ mode: 'rename', entry })} onDelete={(entry) => void deleteEntry(entry)} onMove={(source, target) => void moveEntry(source, target)} onImport={(files, target) => void importMarkdownFiles(files, target)} />
-            </div>
-        </>
-      </aside>
-
-      {!sidebarOpen && <button className="sidebar-reveal icon-button" onClick={() => setSidebarOpen(true)} title="Expand library" aria-label="Expand library"><PanelLeftOpen size={17} /></button>}
+      <LibrarySidebar
+        open={sidebarOpen}
+        tree={tree}
+        activePath={activePath}
+        selectedPath={selectedPath}
+        defaultCreateParent={defaultCreateParent}
+        onOpenChange={setSidebarOpen}
+        onSelect={(entry) => setSelectedPath(entry.path)}
+        onOpen={(path) => void openFile(path)}
+        onCreate={requestCreate}
+        onQuickNote={createQuickNote}
+        onRename={(entry) => setNameDialog({ mode: 'rename', entry })}
+        onDelete={(entry) => void deleteEntry(entry)}
+        onMove={(source, target) => void moveEntry(source, target)}
+        onImport={(files, target) => void importMarkdownFiles(files, target)}
+        onSearch={() => setSearchOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
+        onClearSelection={() => setSelectedPath('')}
+      />
 
       <section className="workspace-stage">
         <DocumentTabs
