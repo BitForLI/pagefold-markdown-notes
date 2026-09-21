@@ -1,17 +1,12 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight,
-  ArrowDownLeft,
-  ArrowUpRight,
   FilePlus2,
   FolderPlus,
   Hash,
   Link2,
-  ListTree,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
   Search,
   Settings,
   Layers3,
@@ -23,7 +18,13 @@ import { FileTree } from './components/FileTree'
 import { SettingsPanel, type AppSettings } from './components/SettingsPanel'
 import { DocumentTabs, SaveStatus } from './components/DocumentTabs'
 import { SearchDialog } from './components/SearchDialog'
-import { displayEntryName, displayLibraryPath, extractDocumentLocations, extractOutgoingDocumentLinks, flattenMarkdownFiles } from './lib/markdown'
+import {
+  DocumentInsightsPanel,
+  InsightControls,
+  type InsightLinkMode,
+  type InsightPanelMode
+} from './components/DocumentInsights'
+import { displayEntryName, extractDocumentLocations, extractOutgoingDocumentLinks, flattenMarkdownFiles } from './lib/markdown'
 
 interface OpenTab {
   path: string
@@ -73,11 +74,10 @@ export default function App() {
     const stored = Number(localStorage.getItem('pagefold:right-panel-width'))
     return Number.isFinite(stored) && stored >= 220 && stored <= 420 ? stored : 260
   })
-  const rightPanelPointer = useRef<number | null>(null)
   const [backlinks, setBacklinks] = useState<BacklinkResult[]>([])
   const [rightContextPath, setRightContextPath] = useState<string | null>(null)
-  const [rightLinkMode, setRightLinkMode] = useState<'backlinks' | 'outgoing'>('backlinks')
-  const [rightPanelMode, setRightPanelMode] = useState<'links' | 'outline'>('links')
+  const [rightLinkMode, setRightLinkMode] = useState<InsightLinkMode>('backlinks')
+  const [rightPanelMode, setRightPanelMode] = useState<InsightPanelMode>('links')
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('pagefold:view') as ViewMode) || 'split')
   const [jumpLine, setJumpLine] = useState<number | null>(null)
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
@@ -595,10 +595,6 @@ export default function App() {
     else notify(`Could not find “${target}”`)
   }, [openFile, tree])
 
-  function resizeRightPanel(clientX: number): void {
-    setRightPanelWidth(Math.min(420, Math.max(220, window.innerWidth - clientX)))
-  }
-
   const breadcrumb = useMemo(() => activePath?.split('/') ?? [], [activePath])
   const defaultCreateParent = useMemo(() => {
     if (!selectedPath) return ''
@@ -641,12 +637,26 @@ export default function App() {
           <span>{workspace.name}</span>
           {breadcrumb.map((part, index) => <span key={`${part}-${index}`}><ChevronRight size={13} />{displayEntryName(part.replace(/\.md$/i, ''))}</span>)}
         </div>
-        <div className="header-actions">
-          <button className={`icon-button ${rightPanelMode === 'links' && rightLinkMode === 'backlinks' && rightPanelOpen ? 'active' : ''}`} onClick={() => { setRightPanelMode('links'); setRightLinkMode('backlinks'); setRightPanelOpen(true) }} title="Show backlinks" aria-label="Show backlinks"><ArrowDownLeft size={17} /></button>
-          <button className={`icon-button ${rightPanelMode === 'links' && rightLinkMode === 'outgoing' && rightPanelOpen ? 'active' : ''}`} onClick={() => { setRightPanelMode('links'); setRightLinkMode('outgoing'); setRightPanelOpen(true) }} title="Show outgoing links" aria-label="Show outgoing links"><ArrowUpRight size={17} /></button>
-          <button className={`icon-button ${rightPanelMode === 'outline' && rightPanelOpen ? 'active' : ''}`} onClick={() => { setRightPanelMode('outline'); setRightPanelOpen(true) }} title="Show outline" aria-label="Show outline"><ListTree size={17} /></button>
-          <button className="icon-button" onClick={() => setRightPanelOpen((value) => !value)} title={rightPanelOpen ? 'Collapse right panel' : 'Expand right panel'} aria-label={rightPanelOpen ? 'Collapse right panel' : 'Expand right panel'}>{rightPanelOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}</button>
-        </div>
+        <InsightControls
+          panelOpen={rightPanelOpen}
+          panelMode={rightPanelMode}
+          linkMode={rightLinkMode}
+          onShowBacklinks={() => {
+            setRightPanelMode('links')
+            setRightLinkMode('backlinks')
+            setRightPanelOpen(true)
+          }}
+          onShowOutgoing={() => {
+            setRightPanelMode('links')
+            setRightLinkMode('outgoing')
+            setRightPanelOpen(true)
+          }}
+          onShowOutline={() => {
+            setRightPanelMode('outline')
+            setRightPanelOpen(true)
+          }}
+          onToggle={() => setRightPanelOpen((value) => !value)}
+        />
       </header>
 
       <aside className="left-sidebar">
@@ -711,61 +721,20 @@ export default function App() {
         <SaveStatus status={activeSaveStatus} text={activeTab ? statusText : 'Ready'} />
       </section>
 
-      <aside className="right-sidebar">
-        <div
-          className="right-panel-resizer"
-          role="separator"
-          aria-label="Resize links panel"
-          aria-orientation="vertical"
-          aria-valuemin={220}
-          aria-valuemax={420}
-          aria-valuenow={Math.round(rightPanelWidth)}
-          tabIndex={0}
-          title="Drag to resize"
-          onPointerDown={(event) => {
-            if (event.button !== 0) return
-            event.preventDefault()
-            rightPanelPointer.current = event.pointerId
-            event.currentTarget.setPointerCapture(event.pointerId)
-            resizeRightPanel(event.clientX)
-          }}
-          onPointerMove={(event) => {
-            if (rightPanelPointer.current === event.pointerId) resizeRightPanel(event.clientX)
-          }}
-          onPointerUp={(event) => {
-            if (rightPanelPointer.current !== event.pointerId) return
-            rightPanelPointer.current = null
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-          }}
-          onPointerCancel={(event) => {
-            if (rightPanelPointer.current !== event.pointerId) return
-            rightPanelPointer.current = null
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowLeft') setRightPanelWidth((current) => Math.min(420, current + 12))
-            else if (event.key === 'ArrowRight') setRightPanelWidth((current) => Math.max(220, current - 12))
-            else return
-            event.preventDefault()
-          }}
-        />
-        {rightContextTab && <div className="right-panel-context"><select value={rightContextTab.path} onChange={(event) => setRightContextPath(event.target.value)} aria-label="Document for links panel">{tabs.map((tab) => <option key={tab.path} value={tab.path}>{tab.name.replace(/\.(md|markdown|txt)$/i, '')}</option>)}</select></div>}
-        {rightPanelMode === 'links' ? (
-          <>
-            <div className="connection-list backlink-list">
-              {!rightContextPath ? null : rightLinkMode === 'backlinks' ? (
-                backlinks.length === 0 ? null : backlinks.map((link, index) => <button key={`${link.path}-${link.line}-${index}`} onClick={() => void openFile(link.path, link.line)}><span><ArrowDownLeft size={13} />{link.name.replace(/\.md$/i, '')}</span><small>{displayLibraryPath(link.path)} · Line {link.line}</small></button>)
-              ) : (
-                outgoingLinks.length === 0 ? null : outgoingLinks.map((link) => <button key={`${link.kind}-${link.target}`} onClick={() => openWiki(link.target)}><span><ArrowUpRight size={13} />{link.label}</span><p>{displayLibraryPath(link.target)}</p><small>Line {link.line}</small></button>)
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="outline-list">
-            {!rightContextPath || outline.length === 0 ? null : outline.map((heading) => <button key={`${heading.line}-${heading.label}`} className={`outline-level-${heading.level}`} onClick={() => void openFile(rightContextPath, heading.line)}><span>{heading.label}</span><small>Line {heading.line}</small></button>)}
-          </div>
-        )}
-      </aside>
+      <DocumentInsightsPanel
+        width={rightPanelWidth}
+        setWidth={setRightPanelWidth}
+        documents={tabs}
+        contextPath={rightContextPath}
+        panelMode={rightPanelMode}
+        linkMode={rightLinkMode}
+        backlinks={backlinks}
+        outgoingLinks={outgoingLinks}
+        outline={outline}
+        onContextPathChange={setRightContextPath}
+        onOpenDocument={(path, line) => void openFile(path, line)}
+        onOpenWiki={openWiki}
+      />
 
       {settingsOpen && <SettingsPanel settings={settings} workspacePath={workspace.rootPath} workspaceBusy={workspaceBusy} backupBusy={backupBusy} lastBackupPath={lastBackupPath} onChange={setSettings} onChooseWorkspace={() => void changeWorkspace('folder')} onUseDefaultWorkspace={() => void changeWorkspace('default')} onBackupWorkspace={() => void backupWorkspace()} onClose={() => { if (!workspaceBusy && !backupBusy) setSettingsOpen(false) }} />}
       {searchOpen && (
