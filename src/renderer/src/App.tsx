@@ -1,6 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Check,
   ChevronRight,
   ArrowDownLeft,
   ArrowUpRight,
@@ -16,13 +15,14 @@ import {
   Search,
   Settings,
   Layers3,
-  X
 } from 'lucide-react'
 import type { BacklinkResult, EntryType, SearchResult, TreeEntry, WorkspaceSnapshot } from '../../shared/types'
 import { EditorPane, type ViewMode } from './components/EditorPane'
 import { NameDialog } from './components/EntryDialog'
 import { FileTree } from './components/FileTree'
 import { SettingsPanel, type AppSettings } from './components/SettingsPanel'
+import { DocumentTabs, SaveStatus } from './components/DocumentTabs'
+import { SearchDialog } from './components/SearchDialog'
 import { displayEntryName, displayLibraryPath, extractDocumentLocations, extractOutgoingDocumentLinks, flattenMarkdownFiles } from './lib/markdown'
 
 interface OpenTab {
@@ -691,11 +691,15 @@ export default function App() {
       {!sidebarOpen && <button className="sidebar-reveal icon-button" onClick={() => setSidebarOpen(true)} title="Expand library" aria-label="Expand library"><PanelLeftOpen size={17} /></button>}
 
       <section className="workspace-stage">
-        {tabs.length > 0 && (
-          <div className="tab-strip">
-            {tabs.map((tab) => <button key={tab.path} data-path={tab.path} draggable onDragStart={(event) => { event.dataTransfer.setData('text/pagefold-path', tab.path); event.dataTransfer.effectAllowed = 'copy' }} className={tab.path === activePath ? 'active' : ''} onClick={() => { setActivePath(tab.path); setSelectedPath(tab.path) }}><FileTextIcon /><span>{tab.name.replace(/\.md$/i, '')}</span>{tab.content !== tab.savedContent && <i />}<b role="button" tabIndex={0} aria-label={`Close ${tab.name}`} onClick={(event) => { event.stopPropagation(); void closeTab(tab.path) }}><X size={13} /></b></button>)}
-          </div>
-        )}
+        <DocumentTabs
+          tabs={tabs}
+          activePath={activePath}
+          onActivate={(path) => {
+            setActivePath(path)
+            setSelectedPath(path)
+          }}
+          onClose={(path) => void closeTab(path)}
+        />
         {activeTab ? (
           <EditorPane path={activeTab.path} content={activeTab.content} openDocuments={tabs} tree={tree} recentPaths={recentPaths} mode={viewMode} jumpLine={jumpLine} onModeChange={setViewMode} onChange={updateContent} onWikiOpen={openWiki} onOpenInPane={openInPane} onAttach={attach} />
         ) : (
@@ -704,10 +708,7 @@ export default function App() {
             <button className="primary-button" onClick={createQuickNote}><FilePlus2 size={17} />New note</button>
           </div>
         )}
-        <footer className="status-bar">
-          <span>{activeTab ? statusText : 'Ready'}</span>
-          <span className={`save-state ${activeSaveStatus}`}><Check size={12} />{activeSaveStatus === 'saving' ? 'Saving' : activeSaveStatus === 'error' ? 'Save failed' : 'Saved locally'}</span>
-        </footer>
+        <SaveStatus status={activeSaveStatus} text={activeTab ? statusText : 'Ready'} />
       </section>
 
       <aside className="right-sidebar">
@@ -768,17 +769,17 @@ export default function App() {
 
       {settingsOpen && <SettingsPanel settings={settings} workspacePath={workspace.rootPath} workspaceBusy={workspaceBusy} backupBusy={backupBusy} lastBackupPath={lastBackupPath} onChange={setSettings} onChooseWorkspace={() => void changeWorkspace('folder')} onUseDefaultWorkspace={() => void changeWorkspace('default')} onBackupWorkspace={() => void backupWorkspace()} onClose={() => { if (!workspaceBusy && !backupBusy) setSettingsOpen(false) }} />}
       {searchOpen && (
-        <div className="modal-backdrop search-dialog-backdrop" onMouseDown={() => setSearchOpen(false)}>
-          <section className="search-dialog" role="dialog" aria-modal="true" aria-label="Search library" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="search-dialog-input"><Search size={16} /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false) }} placeholder="Search every note" /><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="Close search"><X size={16} /></button></div>
-            <div className="search-dialog-results">
-              {searchBusy && <p>Searching…</p>}
-              {!searchBusy && searchQuery.trim() && searchResults.length === 0 && <p>No matches</p>}
-              {!searchBusy && !searchQuery.trim() && <p>Type to search note contents</p>}
-              {searchResults.map((result) => <button key={`${result.path}-${result.line}`} onClick={() => { void openFile(result.path, result.line); setSearchOpen(false) }}><strong>{result.name.replace(/\.(md|markdown|txt)$/i, '')}</strong><small>{displayLibraryPath(result.path)} · Line {result.line}</small><span>{result.excerpt}</span></button>)}
-            </div>
-          </section>
-        </div>
+        <SearchDialog
+          query={searchQuery}
+          results={searchResults}
+          busy={searchBusy}
+          onQueryChange={setSearchQuery}
+          onOpenResult={(result) => {
+            void openFile(result.path, result.line)
+            setSearchOpen(false)
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
       )}
       {nameDialog && (
         <NameDialog
@@ -793,8 +794,4 @@ export default function App() {
       {toast && <div className="toast" role="status">{toast}</div>}
     </main>
   )
-}
-
-function FileTextIcon() {
-  return <span className="tab-file-icon">§</span>
 }
