@@ -1,62 +1,41 @@
-# Pagefold — Local-First Markdown Notes
+# Pagefold
 
-Pagefold is a small desktop Markdown editor built for people who prefer ordinary files over a proprietary notes database. Notes and folders can be created in the app, reorganised by drag and drop, and opened in any other Markdown tool.
+Pagefold is a small Windows Markdown editor. Its main rule is that my notes should still make sense without Pagefold: every note is an ordinary `.md` file inside a folder I choose.
 
-[Download the Windows installer](https://github.com/BitForLI/pagefold-markdown-notes/releases/latest) · [Build it yourself](#development)
+[Download the Windows installer](https://github.com/BitForLI/pagefold-markdown-notes/releases/latest)
 
-The published installer is for Windows x64. Your notes stay as ordinary Markdown files in a folder you control; the app does not require an account or a cloud service.
+I started this project because I like the portability of Markdown but not the experience of writing directly in a large folder tree. Pagefold adds tabs, preview, search, links, attachments, and drag-and-drop organisation without moving the writing into a private database or requiring an account.
 
-## Product at a glance
+## The awkward case that shaped the app
 
-| | |
-| --- | --- |
-| **Users** | People who want a focused notes app without locking their writing into one service |
-| **Problem** | Local Markdown is portable, but raw folders provide a poor writing and organisation experience |
-| **Core experience** | Write, preview, search, link, and organise ordinary `.md` files in a desktop app |
-| **Ownership model** | The user chooses the library folder and keeps it after uninstalling Pagefold |
-| **Conflict behaviour** | External changes never silently replace unsaved work; Pagefold first creates a conflict copy |
+Local files can be changed by more than one program. A sync tool may update a note while it is still open in Pagefold, and silently choosing either version risks losing work.
 
-The main product decision is simple: Pagefold manages the editing experience, not ownership of the content. Cloud synchronisation is optional and remains the responsibility of tools such as OneDrive, Dropbox, or Syncthing.
+Pagefold watches the selected library and compares the expected disk content before saving. If an external change conflicts with unsaved text, it first tries to write the local version to a `-local-conflict` file and then loads the changed disk version. Saves are serialized per file so an older async completion cannot report a newer edit as saved.
 
-## What it does
+This handles common conflicts, but it is not an atomic compare-and-swap and it is not a promise that every filesystem race is impossible. That is also why the packaged smoke check should be run against a test library.
 
-- Edits local Markdown files in a focused desktop interface.
-- Organises notes into folders and sections without changing the file format.
-- Watches local library changes, including files updated by a separate sync tool such as OneDrive, Dropbox, or Syncthing; Pagefold does not provide its own cloud sync.
-- Saves unsaved local edits as a `-local-conflict` copy when it detects a changed disk version during reconciliation.
-- Creates an on-demand, dated backup of the whole library—including attachments—in a folder outside the library. Open notes are saved before copying.
-- Keeps the user's library after the application is uninstalled.
+## Everyday use
 
-The default Windows library is stored at:
+- create, rename, move, and organise Markdown notes and folders
+- edit with Markdown preview, GFM tables, maths, links, and attachments
+- search the library and follow wiki-style links and backlinks
+- reopen previous tabs and restore display settings
+- use a OneDrive, Dropbox, or Syncthing folder if desired; Pagefold does not provide its own cloud sync
+- create a dated backup of notes and attachments in a separate folder
 
-```text
-%APPDATA%\pagefold\vault
-```
+The default Windows library is `%APPDATA%\pagefold\vault`. A different folder can be selected in **Settings > Library location**. Changing libraries never moves or deletes the previous folder automatically.
 
-A different local folder can be selected under **Settings > Library location**. Pagefold never moves or deletes the previous library automatically.
-Use **Settings > Create backup** to make a separate local copy; Pagefold does not upload it or schedule automatic backups.
-The copy is not an atomic snapshot: if another program changes files during the copy, run the backup again after sync settles.
+Backups are manual rather than scheduled. Pagefold saves open notes before copying the library, but the copy is not an atomic snapshot if another program is changing files at the same time.
 
-## Implementation references
+## Where the main ideas live
 
-The [main process](src/main/index.ts) owns filesystem operations and watches
-the selected library. A [typed preload API](src/preload/index.ts) exposes those
-operations to the React renderer without enabling Node integration there.
-The [editor](src/renderer/src/components/EditorPane.tsx) provides edit, split
-and preview modes, GFM and math rendering, links and attachment display.
+- [`src/main/index.ts`](src/main/index.ts) handles filesystem operations and library watching in the Electron main process.
+- [`src/preload/index.ts`](src/preload/index.ts) exposes a typed API to the React renderer without enabling Node integration there.
+- [`src/renderer/src/components/EditorPane.tsx`](src/renderer/src/components/EditorPane.tsx) contains the editing and preview experience.
+- [`src/renderer/src/App.tsx`](src/renderer/src/App.tsx) coordinates open tabs, saves, and external-change reconciliation.
+- [`src/main/libraryBackup.ts`](src/main/libraryBackup.ts) implements the separate library backup.
 
-[Renderer state](src/renderer/src/App.tsx) serializes saves per file, checks the
-expected disk content before writing, and attempts a conflict copy before
-loading an externally changed version. This detects common editing conflicts;
-the check and write are separate operations, not an atomic compare-and-swap.
-Open-tab paths and display settings are kept locally. Search and backlinks
-scan the library files rather than relying on a proprietary database.
-
-[Markdown tests](src/renderer/src/lib/markdown.test.ts) exercise link handling,
-source locations and malformed escapes. The [packaged smoke script](scripts/smoke-packaged.mjs)
-checks file/IPC operations and selected UI flows. It creates temporary notes
-in the selected library and removes them afterward, so use a test library for
-that check. Neither suite establishes an all-races, no-data-loss guarantee.
+Markdown tests exercise link handling and source locations. The packaged smoke script checks selected file, IPC, and interface paths. Neither is presented as exhaustive proof against data loss.
 
 ## Development
 
@@ -65,7 +44,7 @@ npm install
 npm run dev
 ```
 
-Run the checks and create a Windows installer with:
+Run the checks and create the Windows installer with:
 
 ```powershell
 npm test
@@ -75,6 +54,4 @@ npm run dist:win
 
 The installer is written to `release/Pagefold-Setup-<version>.exe`.
 
-## Stack
-
-Electron, React, TypeScript, Vite, Vitest, and electron-builder.
+Built with Electron, React, TypeScript, Vite, Vitest, and electron-builder.
