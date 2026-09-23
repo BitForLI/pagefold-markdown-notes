@@ -6,7 +6,7 @@ import {
   Link2,
   Search,
 } from 'lucide-react'
-import type { BacklinkResult, EntryType, SearchResult, TreeEntry, WorkspaceSnapshot } from '../../shared/types'
+import type { BacklinkResult, EntryType, TreeEntry, WorkspaceSnapshot } from '../../shared/types'
 import { EditorPane, type ViewMode } from './components/EditorPane'
 import { NameDialog } from './components/EntryDialog'
 import { SettingsPanel, type AppSettings } from './components/SettingsPanel'
@@ -92,9 +92,6 @@ export default function App() {
   const [saveErrors, setSaveErrors] = useState<Record<string, boolean>>({})
   const [backlinkRevision, setBacklinkRevision] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [searchBusy, setSearchBusy] = useState(false)
 
   const activeTab = tabs.find((tab) => tab.path === activePath) ?? null
   const rightContextTab = tabs.find((tab) => tab.path === rightContextPath) ?? activeTab
@@ -231,23 +228,6 @@ export default function App() {
     }, 280)
     return () => window.clearTimeout(timer)
   }, [rightContextPath, rightContextTab?.savedContent, backlinkRevision])
-
-  useEffect(() => {
-    if (!searchOpen || !searchQuery.trim()) {
-      setSearchResults([])
-      setSearchBusy(false)
-      return
-    }
-    setSearchBusy(true)
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      window.pagefold.search(searchQuery)
-        .then((results) => { if (!cancelled) setSearchResults(results) })
-        .catch(() => { if (!cancelled) notify('Search failed') })
-        .finally(() => { if (!cancelled) setSearchBusy(false) })
-    }, 220)
-    return () => { cancelled = true; window.clearTimeout(timer) }
-  }, [searchOpen, searchQuery])
 
   useEffect(() => window.pagefold.onPrepareClose(() => {
     void flushAllTabs().then((saved) => {
@@ -712,10 +692,6 @@ export default function App() {
       {settingsOpen && <SettingsPanel settings={settings} workspacePath={workspace.rootPath} workspaceBusy={workspaceBusy} backupBusy={backupBusy} lastBackupPath={lastBackupPath} onChange={setSettings} onChooseWorkspace={() => void changeWorkspace('folder')} onUseDefaultWorkspace={() => void changeWorkspace('default')} onBackupWorkspace={() => void backupWorkspace()} onClose={() => { if (!workspaceBusy && !backupBusy) setSettingsOpen(false) }} />}
       {searchOpen && (
         <SearchDialog
-          query={searchQuery}
-          results={searchResults}
-          busy={searchBusy}
-          onQueryChange={setSearchQuery}
           onOpenResult={(result) => {
             void openFile(result.path, result.line)
             setSearchOpen(false)

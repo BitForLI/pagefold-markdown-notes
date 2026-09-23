@@ -1,24 +1,51 @@
+import { useEffect, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import type { SearchResult } from '../../../shared/types'
 import { displayLibraryPath } from '../lib/markdown'
 
 interface SearchDialogProps {
-  query: string
-  results: SearchResult[]
-  busy: boolean
-  onQueryChange: (query: string) => void
   onOpenResult: (result: SearchResult) => void
   onClose: () => void
 }
 
 export function SearchDialog({
-  query,
-  results,
-  busy,
-  onQueryChange,
   onOpenResult,
   onClose
 }: SearchDialogProps) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setError('')
+    if (!query.trim()) {
+      setResults([])
+      setBusy(false)
+      return
+    }
+
+    setBusy(true)
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      window.pagefold.search(query)
+        .then((nextResults) => {
+          if (!cancelled) setResults(nextResults)
+        })
+        .catch(() => {
+          if (!cancelled) setError('Search failed. Try again.')
+        })
+        .finally(() => {
+          if (!cancelled) setBusy(false)
+        })
+    }, 220)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [query])
+
   return (
     <div className="modal-backdrop search-dialog-backdrop" onMouseDown={onClose}>
       <section
@@ -33,7 +60,7 @@ export function SearchDialog({
           <input
             autoFocus
             value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') onClose()
             }}
@@ -44,8 +71,9 @@ export function SearchDialog({
           </button>
         </div>
         <div className="search-dialog-results">
+          {error && <p>{error}</p>}
           {busy && <p>Searching…</p>}
-          {!busy && query.trim() && results.length === 0 && <p>No matches</p>}
+          {!busy && !error && query.trim() && results.length === 0 && <p>No matches</p>}
           {!busy && !query.trim() && <p>Type to search note contents</p>}
           {results.map((result) => (
             <button key={`${result.path}-${result.line}`} onClick={() => onOpenResult(result)}>
